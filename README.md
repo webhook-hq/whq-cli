@@ -27,12 +27,26 @@ Waiting for webhooks. They're answered by WebhookHQ, then sent here. Ctrl-C to s
 10:42:31  POST   /webhooks   invoice.payment_failed 8be04d2      500 31 ms
 ```
 
-- `--endpoint` is the last part of the endpoint's URL. The target can be a port (`3000`), `localhost:4000`, or a URL (`http://127.0.0.1:8080/api`).
+- `--endpoint` is the last part of the endpoint's URL. The target can be a port (`3000`), a host and port (`localhost:4000`, `app.test:3000`), or a full URL with any hostname and a path (`https://app.webhookhq.test:3000/webhooks`). See [Custom domains and HTTPS](#custom-domains-and-https).
 - Anything after the endpoint URL is added to your app's URL: a webhook sent to `…/acme-stripe-test/webhooks?live=1` arrives at `http://localhost:3000/webhooks?live=1`, with the sender's method, headers and body.
 - WebhookHQ answers the sender straight away (with the endpoint's response, or `200`), so senders never wait on your laptop. What your app answered is shown here and in the event's deliveries in the dashboard.
 - Webhooks arrive in order while `whq listen` runs. If the connection drops, it reconnects by itself; webhooks that arrive while nothing is listening are captured as usual, and you can replay them.
 - `--name` labels this machine in the dashboard (default: its hostname).
 - Plans allow a number of tunnels open at once: Free 1, Developer 1, Pro 3, Team 10, Scale 25.
+
+### Custom domains and HTTPS
+
+If your app runs on a local domain (`app.test`, `shop.localhost`, or your own like `app.acme.test`), often over HTTPS, give `whq` the URL you open in the browser:
+
+```sh
+whq listen https://app.acme.test:3000/webhooks --endpoint acme-stripe-test
+```
+
+- Webhooks go to that host, so your app's host checks and routing (Rails `config.hosts`, virtual hosts in Caddy or nginx, Laravel Valet, Herd) see the name they expect. The path you give comes first, then the webhook's own path and query: `…/acme-stripe-test/stripe?live=1` arrives at `https://app.acme.test:3000/webhooks/stripe?live=1`.
+- The name must resolve on your machine (`/etc/hosts`, dnsmasq, or your tool's own resolver), as it does for your browser.
+- HTTPS certificates are checked against the ones your computer trusts, the same as your browser. A [mkcert](https://github.com/FiloSottile/mkcert) certificate works once `mkcert -install` has run; Caddy, Valet and Herd certificates work once their certificate authority is trusted. If `whq` says your app's certificate isn't trusted and you're sure it's your own, add `--insecure`. It only affects webhooks sent to your app, never `whq`'s connection to WebhookHQ.
+- `whq` doesn't follow redirects, since a redirect would turn the webhook's `POST` into a `GET`. If your app redirects `http://` to `https://`, `whq` shows the URL to use instead.
+- `whq replay` takes the same targets and `--insecure`: `whq replay 3f9a2c1 https://app.acme.test:3000/webhooks`.
 
 ## Replay a webhook
 

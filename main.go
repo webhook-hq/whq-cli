@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -31,9 +32,14 @@ const usage = `whq: WebhookHQ from your terminal
 Usage:
   whq login [--token TOKEN]          Save an access token (Settings → Access tokens)
   whq whoami                         Show the token's organization and owner
-  whq listen [PORT|URL] --endpoint SLUG
+  whq listen [PORT|HOST:PORT|URL] --endpoint SLUG [--insecure]
                                      Deliver the endpoint's webhooks to your app (default port 3000)
-  whq replay EVENT_ID [PORT|URL]     Send a captured webhook to your app again
+  whq replay EVENT_ID [PORT|HOST:PORT|URL] [--insecure]
+                                     Send a captured webhook to your app again
+
+Targets: 3000, localhost:4000, app.test:3000, or a URL with a path,
+like https://app.webhookhq.test:3000/webhooks. --insecure accepts an HTTPS
+certificate this computer doesn't trust (only for your app, never for WebhookHQ).
   whq logout                         Forget the saved token
   whq version
 
@@ -72,6 +78,9 @@ func main() {
 
 // parseArgs splits positional arguments from --flags (anywhere, as --flag value or
 // --flag=value). Only the given flags are accepted.
+// switches are options that take no value: --insecure sets flags["insecure"] to "true".
+var switches = []string{"insecure"}
+
 func parseArgs(args []string, known ...string) (positional []string, flags map[string]string, err error) {
 	flags = map[string]string{}
 	for i := 0; i < len(args); i++ {
@@ -84,7 +93,9 @@ func parseArgs(args []string, known ...string) (positional []string, flags map[s
 		if !contains(known, name) {
 			return nil, nil, fmt.Errorf("unknown option --%s", name)
 		}
-		if !hasValue {
+		if !hasValue && contains(switches, name) {
+			value = "true"
+		} else if !hasValue {
 			if i+1 >= len(args) {
 				return nil, nil, fmt.Errorf("--%s needs a value", name)
 			}
@@ -105,13 +116,13 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// target turns "3000", ":3000", "localhost:3000" or a URL into a base URL for the local app.
+// target turns "3000", ":3000", "localhost:3000", "app.test:3000" or a URL (http or https, any
+// hostname, optionally with a path) into a base URL for the local app. Each webhook's path and
+// query are added after it.
 func target(arg string) (string, error) {
 	switch {
 	case arg == "":
 		return "http://localhost:3000", nil
-	case strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://"):
-		return strings.TrimRight(arg, "/"), nil
 	case strings.HasPrefix(arg, ":"):
 		arg = "localhost" + arg
 	}
@@ -121,7 +132,25 @@ func target(arg string) (string, error) {
 		}
 		return fmt.Sprintf("http://localhost:%d", port), nil
 	}
-	return "http://" + arg, nil
+	if !strings.Contains(arg, "://") {
+		arg = "http://" + arg
+	}
+	u, err := url.Parse(arg)
+	if err != nil || u.Host == "" || u.Hostname() == "" {
+		return "", fmt.Errorf("%q isn't a port, host:port or URL (try 3000 or https://app.test:3000/webhooks)", arg)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("%q: whq sends webhooks over http:// or https:// only", arg)
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return "", fmt.Errorf("%q: leave out the ?query and #fragment; each webhook's own query is added", arg)
+	}
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+			return "", fmt.Errorf("%q: %s isn't a port", arg, p)
+		}
+	}
+	return strings.TrimRight(u.Scheme+"://"+u.Host+u.EscapedPath(), "/"), nil
 }
 
 func client() (*api.Client, error) {
@@ -202,7 +231,7 @@ func whoami() error {
 }
 
 func listen(args []string) error {
-	positional, flags, err := parseArgs(args, "endpoint", "name")
+	positional, flags, err := parseArgs(args, "endpoint", "name", "insecure")
 	if err != nil {
 		return err
 	}
@@ -212,6 +241,9 @@ func listen(args []string) error {
 	local, err := target(first(positional))
 	if err != nil {
 		return err
+	}
+	if flags["insecure"] == "true" {
+		forward.TrustAnyCertificate()
 	}
 	name := flags["name"]
 	if name == "" {
@@ -327,11 +359,11 @@ func deliver(ctx context.Context, local string, message tunnelMessage) forward.R
 	}
 	req := forward.Request{Method: e.Method, Path: e.Path, Query: e.Query, Headers: e.Headers, Body: body}
 	result := forward.Send(ctx, local, req)
-	printResult(e.Method, "/"+e.Path, deref(e.EventType), e.ShortID, result)
+	printResult(local, e.Method, "/"+e.Path, deref(e.EventType), e.ShortID, result)
 	return result
 }
 
-func printResult(method, path, eventType, id string, result forward.Result) {
+func printResult(local, method, path, eventType, id string, result forward.Result) {
 	outcome := ui.Red(result.Error)
 	if result.Error == "" {
 		outcome = ui.Status(result.Status)
@@ -342,10 +374,13 @@ func printResult(method, path, eventType, id string, result forward.Result) {
 	}
 	ui.Printf("%s  %-6s %-24s %s  %s %s\n", ui.Dim(time.Now().Format("15:04:05")), method, path, label, outcome,
 		ui.Dim(fmt.Sprintf("%d ms", result.DurationMS)))
+	if hint := forward.RedirectHint(local, result); hint != "" {
+		ui.Printf("          %s\n", ui.Dim(hint))
+	}
 }
 
 func replay(args []string) error {
-	positional, flags, err := parseArgs(args, "port", "target")
+	positional, flags, err := parseArgs(args, "port", "target", "insecure")
 	if err != nil {
 		return err
 	}
@@ -355,6 +390,9 @@ func replay(args []string) error {
 	local, err := target(firstNonEmpty(flags["target"], flags["port"], second(positional)))
 	if err != nil {
 		return err
+	}
+	if flags["insecure"] == "true" {
+		forward.TrustAnyCertificate()
 	}
 	c, err := client()
 	if err != nil {
@@ -373,7 +411,7 @@ func replay(args []string) error {
 	req := forward.Request{Method: event.Method, Path: strings.TrimPrefix(event.Path, "/"), Query: deref(event.Query),
 		Headers: event.Headers, Body: body}
 	result := forward.Send(context.Background(), local, req)
-	printResult(event.Method, event.Path, deref(event.EventType), strings.ReplaceAll(event.ID, "-", "")[:7], result)
+	printResult(local, event.Method, event.Path, deref(event.EventType), strings.ReplaceAll(event.ID, "-", "")[:7], result)
 	if result.Error == "" && (result.Status < 200 || result.Status > 299) && result.Body != "" {
 		ui.Printf("%s\n", ui.Dim(strings.TrimSpace(result.Body)))
 	}
