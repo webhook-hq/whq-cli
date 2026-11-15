@@ -3,7 +3,8 @@ name: Release
 # Push a tag like v1.0.0 to build whq for every platform, publish a GitHub release with the
 # binaries and their SHA-256 checksums, and update the Homebrew formula in webhook-hq/homebrew-tap
 # (brew install webhook-hq/tap/whq). The tap update needs the HOMEBREW_TAP_TOKEN secret: a
-# fine-grained token with Contents read and write on webhook-hq/homebrew-tap only.
+# fine-grained token with Contents read and write on webhook-hq/homebrew-tap only. Pre-releases
+# update the formula too, so brew can be tested with one before the real release.
 on:
   push:
     tags: ["v*"]
@@ -24,7 +25,11 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "whq $GITHUB_REF_NAME" --generate-notes
+        # A tag with a suffix (v1.0.0-rc.1) is a pre-release: it isn't "latest", so the download
+        # links in the docs keep pointing at the last real release.
+        run: |
+          prerelease=$([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease || true)
+          gh release create "$GITHUB_REF_NAME" dist/* --title "whq $GITHUB_REF_NAME" --generate-notes $prerelease
       - name: Update the Homebrew formula
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
