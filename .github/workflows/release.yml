@@ -1,7 +1,9 @@
 name: Release
 
-# Push a tag like v1.0.0 to build whq for every platform and publish a GitHub release with the
-# binaries and their SHA-256 checksums.
+# Push a tag like v1.0.0 to build whq for every platform, publish a GitHub release with the
+# binaries and their SHA-256 checksums, and update the Homebrew formula in webhook-hq/homebrew-tap
+# (brew install webhook-hq/tap/whq). The tap update needs the HOMEBREW_TAP_TOKEN secret: a
+# fine-grained token with Contents read and write on webhook-hq/homebrew-tap only.
 on:
   push:
     tags: ["v*"]
@@ -23,3 +25,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "whq $GITHUB_REF_NAME" --generate-notes
+      - name: Update the Homebrew formula
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/webhook-hq/homebrew-tap.git" tap
+          mkdir -p tap/Formula
+          script/homebrew_formula "$GITHUB_REF_NAME" > tap/Formula/whq.rb
+          cd tap
+          git config user.name "whq release"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/whq.rb
+          git commit -m "whq ${GITHUB_REF_NAME#v}"
+          git push origin HEAD

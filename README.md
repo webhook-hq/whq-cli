@@ -53,10 +53,20 @@ Sends a captured webhook (its short id from the dashboard or `whq listen`, or th
 
 ## Install
 
-Download the binary for your platform from the [latest release](https://github.com/webhook-hq/whq-cli/releases/latest), check it against `SHA256SUMS`, make it executable and put it on your `PATH`:
+**macOS and Linux, with Homebrew:**
 
 ```sh
-chmod +x whq-darwin-arm64 && mv whq-darwin-arm64 /usr/local/bin/whq
+brew install webhook-hq/tap/whq
+whq --version
+```
+
+`brew upgrade whq` updates it.
+
+**Without Homebrew** (macOS, Linux, Windows): download the binary for your platform from the [latest release](https://github.com/webhook-hq/whq-cli/releases/latest), check it against `SHA256SUMS`, make it executable and put it on your `PATH`:
+
+```sh
+shasum -a 256 -c SHA256SUMS --ignore-missing
+chmod +x whq-darwin-arm64 && sudo mv whq-darwin-arm64 /usr/local/bin/whq
 ```
 
 ## Development
