@@ -83,6 +83,8 @@ shasum -a 256 -c SHA256SUMS --ignore-missing
 chmod +x whq-darwin-arm64 && sudo mv whq-darwin-arm64 /usr/local/bin/whq
 ```
 
+On a Mac, a file downloaded in the browser is quarantined, and the first run says Apple can't check it for malicious software. Clear the flag once with `xattr -d com.apple.quarantine whq-darwin-arm64` before moving it, or install with Homebrew, which doesn't need this.
+
 ## Development
 
 ```sh
