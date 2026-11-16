@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	"webhookhq.dev/whq/internal/api"
+)
 
 func TestTarget(t *testing.T) {
 	cases := map[string]string{
@@ -37,5 +42,17 @@ func TestParseArgsTakesFlagsAnywhere(t *testing.T) {
 	}
 	if _, _, err := parseArgs([]string{"--nope", "x"}, "endpoint"); err == nil {
 		t.Error("unknown flags should fail")
+	}
+}
+
+func TestOwner(t *testing.T) {
+	var personal, service api.Me
+	_ = json.Unmarshal([]byte(`{"user": {"name": "Priya Raman"}}`), &personal)
+	_ = json.Unmarshal([]byte(`{"user": null}`), &service)
+	if got := owner(personal); got != " as Priya Raman" {
+		t.Errorf("personal token: %q", got)
+	}
+	if got := owner(service); got != "" {
+		t.Errorf("service token: %q", got)
 	}
 }

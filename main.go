@@ -197,12 +197,21 @@ func login(args []string) error {
 	return nil
 }
 
+// owner names who a token acts as for whoami: " as Priya Raman", or nothing for a service token,
+// whose name whoami already shows.
 func owner(me api.Me) string {
 	if me.User != nil {
 		return " as " + me.User.Name
 	}
-	return " with service token " + me.Token.Name
+	return ""
 }
+
+// closedError is WebhookHQ closing the tunnel (it went quiet, or the token lost access), as
+// opposed to the connection dropping. listen reconnects either way; reopening fails cleanly when
+// access is gone.
+type closedError struct{ reason string }
+
+func (e closedError) Error() string { return e.reason }
 
 func logout() error {
 	cfg, err := config.Load()
@@ -277,7 +286,11 @@ func listen(args []string) error {
 			ui.Printf("\nStopped.\n")
 			return nil
 		}
-		ui.Printf("%s %v. Reconnecting in %s…\n", ui.Red("Connection lost:"), err, backoff)
+		label := "Connection lost:"
+		if errors.As(err, new(closedError)) {
+			label = "Tunnel closed:"
+		}
+		ui.Printf("%s %s. Reconnecting in %s…\n", ui.Red(label), strings.TrimRight(err.Error(), ". "), backoff)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -338,7 +351,7 @@ func serve(ctx context.Context, c *api.Client, tunnel api.Tunnel, local string) 
 		}
 		switch message.Type {
 		case "closed":
-			return errors.New(message.Reason)
+			return closedError{message.Reason}
 		case "event":
 			result := deliver(ctx, local, message)
 			if err := conn.Perform(ctx, "result", map[string]any{
