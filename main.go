@@ -188,7 +188,7 @@ func login(args []string) error {
 	}
 	token := flags["token"]
 	if token == "" {
-		ui.Printf("Create a token in WebhookHQ under Settings → Access tokens, then paste it here.\nToken: ")
+		ui.Printf("Create a token in WebhookHQ on the Access tokens tab, then paste it here.\nToken: ")
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		token = strings.TrimSpace(line)
 	}

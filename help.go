@@ -14,7 +14,7 @@ Usage
   whq <command> [arguments] [flags]
 
 Get started
-  login         Save an access token (Settings → Access tokens in WebhookHQ)
+  login         Save an access token (the Access tokens tab in WebhookHQ)
   whoami        Show the token's organization and who it acts as
 
 Webhooks on your machine
@@ -58,7 +58,7 @@ var helps = map[string]string{
 Usage
   whq login [--token TOKEN]
 
-  Create a token in WebhookHQ under Settings → Access tokens (a personal token acts as you; a
+  Create a token in WebhookHQ on the Access tokens tab (a personal token acts as you; a
   service token, made by owners and admins, suits CI), then paste it when asked. It's checked,
   then saved in ~/.config/whq/config.json, readable only by you. In CI, set WHQ_TOKEN instead.
 
@@ -74,7 +74,7 @@ Examples
 Usage
   whq logout
 
-  The token keeps working until you delete it in WebhookHQ (Settings → Access tokens).
+  The token keeps working until you delete it in WebhookHQ (the Access tokens tab).
 `,
 	"whoami": `whq whoami: show the token's organization and who it acts as
 
