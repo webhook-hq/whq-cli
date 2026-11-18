@@ -61,12 +61,12 @@ Sends a captured webhook (its short id from the dashboard or `whq listen`, or th
 ## Find and inspect webhooks
 
 ```sh
-whq endpoints                                         # your endpoints, their slugs and URLs
-whq events list --endpoint acme-stripe-test           # newest first: id, time, type, sender, size
+whq endpoints                               # slugs and URLs
+whq events list --endpoint acme-stripe-test # newest first
 whq events list --endpoint acme-stripe-test --status failed --range 7d
 whq events list --endpoint acme-stripe-test -q '$.data.object.customer == "cus_123"'
-whq events view 3f9a2c1                               # headers, body (JSON indented) and deliveries
-whq events view 3f9a2c1 --body | jq .data.object      # only the body, exactly as sent
+whq events view 3f9a2c1                     # headers, body, deliveries
+whq events view 3f9a2c1 --body | jq .data   # only the body, as sent
 ```
 
 ```
@@ -77,7 +77,7 @@ whq events view 3f9a2c1 --body | jq .data.object      # only the body, exactly a
 - `events list` filters: `--type`, `--source` (sender), `--status` (`delivered`, `failed`, `pending`), `--range` (`1h`, `24h`, `7d`, `30d`), `--since`/`--before` (ISO 8601 times), `--search`/`-q` (ids, types and paths partly, body text exactly; starting with `$`, JSONPath over JSON bodies) and `--limit` (1–100, default 20). When there are more, it prints the `--before` to page back with.
 - `--json` prints the API's response unchanged (the [API docs](https://webhookhq.dev/docs/api) describe it), for scripts and agents: `whq events list --endpoint acme-stripe-test --json | jq -r '.events[0].id'`.
 - Set `WHQ_ENDPOINT` to leave out `--endpoint` in `listen`, `events list` and `wait`.
-- On every plan.
+- All of this works on every plan.
 
 ## Wait for a webhook
 
