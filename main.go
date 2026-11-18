@@ -27,32 +27,17 @@ import (
 
 var version = "dev" // set by the build: -ldflags "-X main.version=1.2.3"
 
-const usage = `whq: WebhookHQ from your terminal
-
-Usage:
-  whq login [--token TOKEN]          Save an access token (Settings → Access tokens)
-  whq whoami                         Show the token's organization and owner
-  whq listen [PORT|HOST:PORT|URL] --endpoint SLUG [--insecure]
-                                     Deliver the endpoint's webhooks to your app (default port 3000)
-  whq replay EVENT_ID [PORT|HOST:PORT|URL] [--insecure]
-                                     Send a captured webhook to your app again
-
-Targets: 3000, localhost:4000, app.test:3000, or a URL with a path,
-like https://app.webhookhq.test:3000/webhooks. --insecure accepts an HTTPS
-certificate this computer doesn't trust (only for your app, never for WebhookHQ).
-  whq logout                         Forget the saved token
-  whq version
-
-Environment: WHQ_TOKEN (instead of whq login), WHQ_API_URL (default https://app.webhookhq.dev)
-`
-
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Print(usage)
 		os.Exit(2)
 	}
+	command, args := os.Args[1], os.Args[2:]
+	if wantsHelp(args) && command != "help" {
+		command, args = "help", append([]string{command}, positionalWords(args)...)
+	}
 	var err error
-	switch command, args := os.Args[1], os.Args[2:]; command {
+	switch command {
 	case "login":
 		err = login(args)
 	case "logout":
@@ -63,10 +48,23 @@ func main() {
 		err = listen(args)
 	case "replay":
 		err = replay(args)
+	case "endpoints":
+		err = endpoints(args)
+	case "events":
+		if len(args) == 0 {
+			fmt.Print(helps["events"])
+			return
+		}
+		err = events(args)
+	case "wait":
+		err = wait(args)
 	case "version", "--version", "-v":
 		fmt.Println("whq " + version)
 	case "help", "--help", "-h":
-		fmt.Print(usage)
+		var text string
+		if text, err = helpFor(args); err == nil {
+			fmt.Print(text)
+		}
 	default:
 		err = fmt.Errorf("unknown command %q. Run whq help", command)
 	}
@@ -76,10 +74,22 @@ func main() {
 	}
 }
 
+// positionalWords keeps a command's words before its first flag ("view" in events view --help).
+func positionalWords(args []string) []string {
+	var words []string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			break
+		}
+		words = append(words, arg)
+	}
+	return words
+}
+
 // parseArgs splits positional arguments from --flags (anywhere, as --flag value or
 // --flag=value). Only the given flags are accepted.
 // switches are options that take no value: --insecure sets flags["insecure"] to "true".
-var switches = []string{"insecure"}
+var switches = []string{"insecure", "json", "body"}
 
 func parseArgs(args []string, known ...string) (positional []string, flags map[string]string, err error) {
 	flags = map[string]string{}
@@ -244,8 +254,9 @@ func listen(args []string) error {
 	if err != nil {
 		return err
 	}
-	if flags["endpoint"] == "" {
-		return errors.New("which endpoint? whq listen 3000 --endpoint <slug> (the last part of its URL)")
+	slug, err := endpointFlag(flags, "whq listen 3000 --endpoint <slug>")
+	if err != nil {
+		return err
 	}
 	local, err := target(first(positional))
 	if err != nil {
@@ -267,7 +278,7 @@ func listen(args []string) error {
 	defer stop()
 	backoff, announced := time.Second, false
 	for {
-		tunnel, err := c.OpenTunnel(flags["endpoint"], local, name)
+		tunnel, err := c.OpenTunnel(slug, local, name)
 		var apiErr *api.Error
 		if errors.As(err, &apiErr) && apiErr.Status < 500 && apiErr.Status != 429 {
 			return err // not found, over the plan's limit, bad token: retrying won't help
@@ -398,7 +409,7 @@ func replay(args []string) error {
 		return err
 	}
 	if len(positional) == 0 {
-		return errors.New("which event? whq replay <event id> [port]: the id is shown in the dashboard and by whq listen")
+		return errors.New("which webhook? whq replay <id> [port]: the short id from whq events list, whq listen or the dashboard")
 	}
 	local, err := target(firstNonEmpty(flags["target"], flags["port"], second(positional)))
 	if err != nil {
@@ -411,20 +422,18 @@ func replay(args []string) error {
 	if err != nil {
 		return err
 	}
-	event, err := c.Event(positional[0])
+	event, _, err := c.Event(positional[0])
 	if err != nil {
 		return err
 	}
-	body := []byte(deref(event.Body))
-	if event.BodyEncoding == "base64" {
-		if body, err = base64.StdEncoding.DecodeString(deref(event.Body)); err != nil {
-			return err
-		}
+	body, err := eventBody(event)
+	if err != nil {
+		return err
 	}
 	req := forward.Request{Method: event.Method, Path: strings.TrimPrefix(event.Path, "/"), Query: deref(event.Query),
 		Headers: event.Headers, Body: body}
 	result := forward.Send(context.Background(), local, req)
-	printResult(local, event.Method, event.Path, deref(event.EventType), strings.ReplaceAll(event.ID, "-", "")[:7], result)
+	printResult(local, event.Method, event.Path, deref(event.EventType), shortID(event.ID), result)
 	if result.Error == "" && (result.Status < 200 || result.Status > 299) && result.Body != "" {
 		ui.Printf("%s\n", ui.Dim(strings.TrimSpace(result.Body)))
 	}
