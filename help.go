@@ -152,7 +152,7 @@ Flags
 Example
   whq endpoints --json | jq -r '.endpoints[].slug'
 
-Pro plan and above (it uses the API).
+On every plan.
 `,
 	"events": `whq events: find and inspect captured webhooks
 
@@ -194,7 +194,7 @@ Examples
   whq events list --endpoint stripe-test -q '$.data.object.customer == "cus_123"'
   whq events list --endpoint stripe-test --json | jq -r '.events[0].id'
 
-Pro plan and above (it uses the API). whq events view and whq replay work on every plan.
+On every plan.
 `,
 	"events view": `whq events view: show one webhook in full
 
@@ -244,7 +244,7 @@ Examples
   whq wait --endpoint stripe-test --type checkout.session.completed
   whq wait --endpoint stripe-test --timeout 5m --json | jq -r '.event.id'
 
-Pro plan and above (it uses the API).
+On every plan.
 `,
 	"agents": `Using whq from a coding agent
 

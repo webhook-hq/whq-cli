@@ -77,7 +77,7 @@ whq events view 3f9a2c1 --body | jq .data.object      # only the body, exactly a
 - `events list` filters: `--type`, `--source` (sender), `--status` (`delivered`, `failed`, `pending`), `--range` (`1h`, `24h`, `7d`, `30d`), `--since`/`--before` (ISO 8601 times), `--search`/`-q` (ids, types and paths partly, body text exactly; starting with `$`, JSONPath over JSON bodies) and `--limit` (1–100, default 20). When there are more, it prints the `--before` to page back with.
 - `--json` prints the API's response unchanged (the [API docs](https://webhookhq.dev/docs/api) describe it), for scripts and agents: `whq events list --endpoint acme-stripe-test --json | jq -r '.events[0].id'`.
 - Set `WHQ_ENDPOINT` to leave out `--endpoint` in `listen`, `events list` and `wait`.
-- `events view` and `replay` work on every plan. `endpoints`, `events list` and `wait` use the API, on the Pro plan and above.
+- On every plan.
 
 ## Wait for a webhook
 

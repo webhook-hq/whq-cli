@@ -19,7 +19,6 @@ import (
 type fakeAPI struct {
 	mu     sync.Mutex
 	events []map[string]any
-	plan   bool // answer lists with plan_required, as on Free
 	server *httptest.Server
 	lists  []string // the query of each list request
 }
@@ -51,9 +50,6 @@ func (f *fakeAPI) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/api/v1/me":
 		_ = json.NewEncoder(w).Encode(map[string]any{"organization": map[string]string{"name": "Acme"}})
-	case r.URL.Path == "/api/v1/events" && f.plan:
-		w.WriteHeader(http.StatusForbidden)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "plan_required", "message": "The API is on the Pro plan and above."})
 	case r.URL.Path == "/api/v1/events":
 		f.lists = append(f.lists, r.URL.RawQuery)
 		list := []map[string]any{}
@@ -109,15 +105,6 @@ func TestEventsListTakesTheEndpointFromTheEnvironment(t *testing.T) {
 	capture(t)
 	if err := eventsList(nil); err != nil || !strings.Contains(f.lists[0], "endpoint=from-env") {
 		t.Fatalf("%v %v", err, f.lists)
-	}
-}
-
-func TestEventsListExplainsThePlan(t *testing.T) {
-	f := newFakeAPI(t)
-	f.plan = true
-	err := eventsList([]string{"--endpoint", "stripe"})
-	if err == nil || !strings.Contains(err.Error(), "whq events view and whq replay work on every plan") {
-		t.Fatalf("got %v", err)
 	}
 }
 

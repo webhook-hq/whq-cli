@@ -31,15 +31,6 @@ func endpointFlag(flags map[string]string, example string) (string, error) {
 	return "", fmt.Errorf("which endpoint? %s (the last part of its URL; whq endpoints lists them, or set WHQ_ENDPOINT)", example)
 }
 
-// planHint explains a plan_required answer in the CLI's terms.
-func planHint(err error) error {
-	var apiErr *api.Error
-	if errors.As(err, &apiErr) && apiErr.Code == "plan_required" {
-		return fmt.Errorf("%s whq events view and whq replay work on every plan.", strings.TrimRight(apiErr.Message, ".")+".")
-	}
-	return err
-}
-
 // printJSON writes an API response indented, so it reads well and still parses.
 func printJSON(raw []byte) error {
 	var out bytes.Buffer
@@ -61,7 +52,7 @@ func endpoints(args []string) error {
 	}
 	list, raw, err := c.Endpoints(flags["workspace"])
 	if err != nil {
-		return planHint(err)
+		return err
 	}
 	if flags["json"] == "true" {
 		return printJSON(raw)
@@ -116,7 +107,7 @@ func eventsList(args []string) error {
 	}
 	list, raw, err := c.Events(params)
 	if err != nil {
-		return planHint(err)
+		return err
 	}
 	if flags["json"] == "true" {
 		return printJSON(raw)
@@ -276,7 +267,7 @@ func wait(args []string) error {
 		params.Set("since", since)
 		list, _, err := c.Events(params)
 		if err != nil {
-			return planHint(err)
+			return err
 		}
 		for _, e := range list.Events {
 			seen[e.ID] = true
@@ -301,7 +292,7 @@ func wait(args []string) error {
 	for {
 		list, _, err := c.Events(params)
 		if err != nil {
-			return planHint(err)
+			return err
 		}
 		// Newest first: the first to arrive is the last new one.
 		for i := len(list.Events) - 1; i >= 0; i-- {
