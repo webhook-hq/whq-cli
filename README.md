@@ -6,7 +6,7 @@ Every command has help with examples: `whq help`, `whq help <command>` or `whq <
 
 ## Sign in
 
-Create an access token in WebhookHQ under **Settings → Access tokens** (a personal token acts as you; a service token, made by owners and admins, suits CI), then:
+Create an access token in WebhookHQ on the **Access tokens** tab (a personal token acts as you; a service token, made by owners and admins, suits CI), then:
 
 ```sh
 whq login            # paste the token when asked
